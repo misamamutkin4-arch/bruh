@@ -1,0 +1,196 @@
+import { useState, useEffect } from 'react';
+import { 
+  Home, 
+  Layers, 
+  Settings as SettingsIcon, 
+  User, 
+  Bell, 
+  Plus, 
+  CheckCircle2, 
+  Loader2,
+  Trash2,
+  Send
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+
+// Настройка API (берем из конфига)
+const API_URL = 'http://localhost:3000/api';
+
+const api = axios.create({ baseURL: API_URL });
+
+// --- Основные компоненты интерфейса ---
+
+const Button = ({ children, className, loading, ...props }: any) => (
+  <button 
+    className={`relative flex items-center justify-center px-4 py-2 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50 ${className}`}
+    disabled={loading}
+    {...props}
+  >
+    {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+    {children}
+  </button>
+);
+
+const Toggle = ({ enabled, onToggle }: { enabled: boolean, onToggle: () => void }) => (
+  <button 
+    onClick={onToggle}
+    className={`w-12 h-6 rounded-full transition-colors relative ${enabled ? "bg-purple-600" : "bg-gray-700"}`}
+  >
+    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${enabled ? "left-7" : "left-1"}`} />
+  </button>
+);
+
+// --- СТРАНИЦА: ЛЕНТА ---
+const NewsFeed = () => {
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [genId, setGenId] = useState(null);
+
+  const load = async () => {
+    try {
+      const res = await api.get('/news');
+      setNews(res.data);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleGenerate = async (item: any) => {
+    setGenId(item.id);
+    try {
+      await api.post('/generate', item);
+      alert("✅ Пост отправлен в канал!");
+    } catch (e) { alert("Ошибка API"); }
+    finally { setGenId(null); }
+  };
+
+  const handleReject = async (id: string) => {
+    await api.post('/reject', { newsId: id });
+    setNews(news.filter((n: any) => n.id !== id));
+  };
+
+  return (
+    <div className="space-y-6 pb-20">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Новости</h1>
+        <Bell className="text-gray-400" />
+      </div>
+
+      <AnimatePresence mode="popLayout">
+        {news.map((item: any) => (
+          <motion.div key={item.id} layout exit={{ opacity: 0, x: 100 }} className="glass-card p-4 space-y-3">
+            <div className="flex justify-between text-xs text-gray-400">
+              <span className="text-purple-400 font-bold uppercase">{item.priority}</span>
+              <span>{item.source} • {item.time}</span>
+            </div>
+            <h3 className="font-bold text-lg">{item.title}</h3>
+            <p className="text-gray-400 text-sm line-clamp-2">{item.content}</p>
+            <div className="flex space-x-2 pt-2">
+              <Button className="flex-1 bg-purple-600 text-white" loading={genId === item.id} onClick={() => handleGenerate(item)}>
+                <Send className="w-4 h-4 mr-2" /> Пост
+              </Button>
+              <Button className="bg-gray-800 text-gray-400" onClick={() => handleReject(item.id)}>
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// --- СТРАНИЦА: ИСТОЧНИКИ ---
+const Sources = () => {
+  const [sources, setSources] = useState([]);
+  useEffect(() => { api.get('/sources').then(res => setSources(res.data)); }, []);
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold">Источники</h1>
+      {sources.map((s: any) => (
+        <div key={s.id} className="glass-card p-4 flex items-center justify-between">
+          <div><div className="font-bold">{s.name}</div><div className="text-xs text-gray-500">{s.url}</div></div>
+          <Toggle enabled={s.enabled} onToggle={() => {}} />
+        </div>
+      ))}
+      <Button className="w-full bg-gradient-to-r from-purple-600 to-blue-600 h-12 mt-4">
+        <Plus className="mr-2" /> Добавить
+      </Button>
+    </div>
+  );
+};
+
+// --- СТРАНИЦА: АССИСТЕНТ ---
+const Assistant = () => {
+  const [settings, setSettings] = useState({ tone: 'expert', length: 300, prompt: '' });
+  
+  const save = async () => {
+    await api.post('/settings', settings);
+    alert("✅ Сохранено");
+  };
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Настройки ИИ</h1>
+      <div className="space-y-2">
+        <label className="text-gray-400 text-sm">Тон текста</label>
+        <div className="grid grid-cols-3 gap-2">
+          {['neutral', 'expert', 'emotional'].map(t => (
+            <button key={t} onClick={() => setSettings({...settings, tone: t})} className={`p-2 rounded-lg border text-sm ${settings.tone === t ? "border-purple-500 bg-purple-500/10" : "border-gray-700"}`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Button onClick={save} className="w-full bg-purple-600 h-12">💾 Сохранить</Button>
+    </div>
+  );
+};
+
+// --- СТРАНИЦА: ПРОФИЛЬ ---
+const Profile = () => {
+  return (
+    <div className="space-y-6 text-center">
+      <div className="w-20 h-20 bg-purple-600 rounded-full mx-auto flex items-center justify-center text-2xl font-bold">A</div>
+      <div><h1 className="text-xl font-bold">Администратор</h1><p className="text-gray-400">Копирайтер</p></div>
+      <div className="glass-card p-4 text-left space-y-4">
+        <div className="flex justify-between items-center"><span>Уведомления</span><Toggle enabled={true} onToggle={() => {}} /></div>
+        <div className="text-sm text-gray-400">Версия: 1.0.0</div>
+      </div>
+    </div>
+  );
+};
+
+// --- ГЛАВНЫЙ КОМПОНЕНТ ---
+export default function App() {
+  const [tab, setTab] = useState('feed');
+
+  return (
+    <div className="min-h-screen bg-[#0f172a] text-white p-6">
+      <main className="max-w-md mx-auto">
+        {tab === 'feed' && <NewsFeed />}
+        {tab === 'sources' && <Sources />}
+        {tab === 'assistant' && <Assistant />}
+        {tab === 'profile' && <Profile />}
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-[#0f172a]/80 backdrop-blur-lg border-t border-white/5 p-4">
+        <div className="max-w-md mx-auto flex justify-between">
+          {[
+            { id: 'feed', icon: Home, label: 'Лента' },
+            { id: 'sources', icon: Layers, label: 'Источники' },
+            { id: 'assistant', icon: SettingsIcon, label: 'ИИ' },
+            { id: 'profile', icon: User, label: 'Профиль' },
+          ].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`flex flex-col items-center space-y-1 ${tab === t.id ? "text-purple-500" : "text-gray-500"}`}>
+              <t.icon className="w-6 h-6" />
+              <span className="text-[10px]">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
+}
